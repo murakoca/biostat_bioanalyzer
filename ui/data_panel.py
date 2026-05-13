@@ -210,7 +210,7 @@ class DataPanel(QWidget):
             df = df.dropna()
         if self.chk_fillna.isChecked():
             for col in df.select_dtypes(include=np.number).columns:
-                df[col].fillna(df[col].median(), inplace=True)
+                df[col] = df[col].fillna(df[col].median())
         self.df_clean = df
         self._show_table(df)
         self._show_summary(df)

@@ -140,6 +140,10 @@ class HypothesisPanel(QWidget):
                 out += self._anova(df, col1, grp)
             elif test == "Ki-kare":
                 out += self._chi2(df, col1, grp)
+            elif test == "Fisher Exact":
+                out += self._fisher(df, col1, grp)
+            elif test == "McNemar":
+                out += self._mcnemar(df, col1, grp)
             elif test == "Pearson Korelasyon":
                 out += self._pearson(df, col1, col2)
             elif test == "Spearman Korelasyon":
@@ -215,6 +219,28 @@ class HypothesisPanel(QWidget):
         return (f"Ki-kare = {chi2:.4f}\np = {p:.4f}\ndf = {dof}\n"
                 f"{'✅ İstatistiksel olarak anlamlı (p<0.05)' if p<0.05 else '❌ İstatistiksel olarak anlamsız (p≥0.05)'}")
 
+    def _fisher(self, df, col1, col2):
+        ct = pd.crosstab(df[col1], df[col2])
+        if ct.shape != (2, 2):
+            return f"❌ Fisher Exact testi yalnızca 2×2 tablolar için geçerlidir. Mevcut tablo: {ct.shape[0]}×{ct.shape[1]}"
+        odds, p = stats.fisher_exact(ct)
+        self._plot_heatmap(ct)
+        return (f"Fisher Exact Testi\nOdds Ratio = {odds:.4f}\np = {p:.4f}\n"
+                f"{'✅ İstatistiksel olarak anlamlı (p<0.05)' if p < 0.05 else '❌ İstatistiksel olarak anlamsız (p≥0.05)'}")
+
+    def _mcnemar(self, df, col1, col2):
+        ct = pd.crosstab(df[col1], df[col2])
+        if ct.shape != (2, 2):
+            return f"❌ McNemar testi yalnızca 2×2 tablolar için geçerlidir. Mevcut tablo: {ct.shape[0]}×{ct.shape[1]}"
+        try:
+            from statsmodels.stats.contingency_tables import mcnemar
+            result = mcnemar(ct, exact=True)
+            self._plot_heatmap(ct)
+            return (f"McNemar Testi\np = {result.pvalue:.4f}\nstatistic = {result.statistic:.4f}\n"
+                    f"{'✅ İstatistiksel olarak anlamlı (p<0.05)' if result.pvalue < 0.05 else '❌ İstatistiksel olarak anlamsız (p≥0.05)'}")
+        except Exception as e:
+            return f"❌ McNemar hatası: {e}"
+
     def _pearson(self, df, col1, col2):
         d = df[[col1, col2]].dropna()
         r, p = stats.pearsonr(d[col1], d[col2])
@@ -251,6 +277,11 @@ class HypothesisPanel(QWidget):
 
     def _logistic_reg(self, df, y_col, x_col):
         d = df[[y_col, x_col]].dropna()
+        unique_vals = d[y_col].dropna().unique()
+        if not set(unique_vals).issubset({0, 1, 0.0, 1.0}):
+            return (f"❌ Lojistik regresyon için bağımlı değişken (Değişken 1) yalnızca 0/1 değerleri içermelidir.\n"
+                    f"Seçilen '{y_col}' sütununda {len(unique_vals)} farklı değer var.\n"
+                    f"İpucu: 'sigara' veya 'surv_olay' gibi ikili (binary) bir sütun seçin.")
         try:
             X = sm.add_constant(d[x_col])
             model = sm.Logit(d[y_col], X).fit(disp=False)
